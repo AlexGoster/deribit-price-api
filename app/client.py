@@ -28,6 +28,7 @@ class DeribitClient:
         self._url = f"{base_url.rstrip('/')}/public/get_index_price"
         self._retry_attempts = retry_attempts
         self._retry_delay_seconds = retry_delay_seconds
+        self._max_response_bytes = 64 * 1024
         self._logger = logging.getLogger(__name__)
 
     async def get_index_price(self, ticker: Ticker) -> Decimal:
@@ -49,9 +50,14 @@ class DeribitClient:
                 raise RetryableDeribitError(f"Deribit HTTP {response.status}")
             if response.status != 200:
                 raise DeribitError(f"Deribit HTTP {response.status}")
+            body = bytearray()
+            async for chunk in response.content.iter_chunked(8192):
+                if len(body) + len(chunk) > self._max_response_bytes:
+                    raise DeribitError("Deribit response exceeds 64 KiB")
+                body.extend(chunk)
             try:
-                payload = json.loads(await response.text(), parse_float=Decimal)
-            except (ValueError, UnicodeError) as error:
+                payload = json.loads(body, parse_float=Decimal)
+            except (ValueError, UnicodeError, RecursionError, InvalidOperation) as error:
                 raise DeribitError("Invalid JSON response") from error
         if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
             raise DeribitError("Invalid JSON-RPC response")

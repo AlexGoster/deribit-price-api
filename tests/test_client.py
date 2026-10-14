@@ -56,6 +56,15 @@ async def test_real_http_contract_and_retry():
         '{"jsonrpc":"2.0","result":{"index_price":NaN}}',
         '{"jsonrpc":"2.0","result":{"index_price":1000000000000}}',
         '{"jsonrpc":"2.0","result":{"index_price":0.000000001}}',
+        pytest.param(
+            '{"jsonrpc":"2.0","result":{"index_price":1e999999999999999999999}}',
+            id="extreme-exponent",
+        ),
+        pytest.param("[" * 2000 + "0" + "]" * 2000, id="deep-nesting"),
+        pytest.param(
+            " " * (64 * 1024) + '{"jsonrpc":"2.0","result":{"index_price":100}}',
+            id="oversized-response",
+        ),
     ],
 )
 async def test_invalid_exchange_data_is_rejected(body):
